@@ -236,8 +236,10 @@ class AccountMove(models.Model):
     @api.model
     def _get_invoice_in_payment_state(self):
         """Called from _compute_payment_state method.
-        Consider in_payment all the moves that are included in a payment order.
+        There is currently no means to perform a transition for 'in_paid' to 'paid' so,
+        consider paid all the moves that are included in a payment order.
+        If a payment order fails, it can be canceled and redone.
         """
         if self.line_ids.payment_line_ids:
-            return "in_payment"
+            return "paid"   # "in_payment" replaced by "paid"
         return super()._get_invoice_in_payment_state()
