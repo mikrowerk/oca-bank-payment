@@ -530,6 +530,8 @@ class AccountPaymentOrder(models.Model):
         if party_type == 'Dbtr':
             party_currency = etree.SubElement(party_account, "Ccy")
             party_currency.text = partner_bank.currency_id.name
+            if partner_bank.currency_id.name != "EUR":
+                raise UserError(f"SEPA Payment does only support EUR but not {partner_bank.currency_id.name}")
         return True
 
     @api.model
