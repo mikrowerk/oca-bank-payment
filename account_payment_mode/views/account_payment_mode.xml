@@ -13,17 +13,18 @@
                         invisible="active"
                     />
                     <group name="main">
-                        <field name="name" />
+                        <field name="sequence"/>
+                        <field name="name"/>
                         <field
                             name="company_id"
                             groups="!base.group_multi_company"
                             invisible="1"
                         />
-                        <field name="company_id" groups="base.group_multi_company" />
-                        <field name="active" invisible="1" />
-                        <field name="payment_method_id" />
-                        <field name="payment_type" />
-                        <field name="bank_account_link" />
+                        <field name="company_id" groups="base.group_multi_company"/>
+                        <field name="active" invisible="1"/>
+                        <field name="payment_method_id"/>
+                        <field name="payment_type"/>
+                        <field name="bank_account_link"/>
                         <field
                             name="fixed_journal_id"
                             invisible="bank_account_link != 'fixed'"
@@ -37,7 +38,7 @@
                         />
                     </group>
                     <group string="Note" name="note">
-                        <field name="note" nolabel="1" colspan="2" />
+                        <field name="note" nolabel="1" colspan="2"/>
                     </group>
                 </sheet>
             </form>
@@ -48,17 +49,17 @@
         <field name="model">account.payment.mode</field>
         <field name="arch" type="xml">
             <tree>
-                <field name="sequence" widget="handle" />
-                <field name="name" />
-                <field name="payment_method_id" />
-                <field name="payment_type" />
-                <field name="bank_account_link" />
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="payment_method_id"/>
+                <field name="payment_type"/>
+                <field name="bank_account_link"/>
                 <field
                     name="company_id"
                     groups="!base.group_multi_company"
                     invisible="1"
                 />
-                <field name="company_id" groups="base.group_multi_company" />
+                <field name="company_id" groups="base.group_multi_company"/>
             </tree>
         </field>
     </record>
@@ -67,7 +68,7 @@
         <field name="model">account.payment.mode</field>
         <field name="arch" type="xml">
             <search string="Search Payment Modes">
-                <field name="name" />
+                <field name="name"/>
                 <filter
                     name="inbound"
                     string="Inbound"
