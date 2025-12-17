@@ -13,7 +13,7 @@ from odoo import _, api, fields, models, tools
 from odoo.exceptions import UserError
 from odoo.tools.safe_eval import safe_eval
 
-from schwifty import IBAN, BIC
+from schwifty import IBAN
 
 try:
     from unidecode import unidecode
@@ -474,16 +474,25 @@ class AccountPaymentOrder(models.Model):
         In some localization (l10n_ch_sepa for example), they need the
         bank_line argument"""
         assert order in ("B", "C"), "Order can be 'B' or 'C'"
+        # normalize BIC to 11 Characters to avoid issues with some banking software
         if partner_bank.bank_bic:
             if len(partner_bank.bank_bic) == 8:
                 _partner_bic = partner_bank.bank_bic + "XXX"
-            else:
+            elif len(partner_bank.bank_bic) == 11:
                 _partner_bic = partner_bank.bank_bic
-            _bic = IBAN(partner_bank.acc_number).bic
-            if _bic and _bic != partner_bank.bank_bic:
+            else:
                 raise UserError(
-                    f"bic {partner_bank.bank_bic} doesn't match expected value {_bic} "
+                    f"bic {partner_bank.bank_bic} doesn't match expected length of 8 or 11 Characters "
                     f"for Bank {partner_bank.bank_name}, IBAN {partner_bank.acc_number}")
+            # calculate BIC from IBAN
+            _bic = IBAN(partner_bank.acc_number).bic
+            if _bic and len(_bic) == 8:
+                _bic += "XXX"
+            if _bic and _bic != _partner_bic:
+                raise UserError(
+                    f"bic {_bic} doesn't match expected value {_bic} "
+                    f"for Bank {partner_bank.bank_name}, IBAN {partner_bank.acc_number}, "
+                    f"BIC {IBAN(partner_bank.acc_number).bic}")
 
             party_agent = etree.SubElement(parent_node, "%sAgt" % party_type)
             party_agent_institution = etree.SubElement(party_agent, "FinInstnId")
