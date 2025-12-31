@@ -76,12 +76,12 @@ class TestSDDBase(TransactionCase):
         )
         cls.bank = cls.env["res.bank"].create(
             {
-                "name": "La Banque Postale",
-                "bic": "PSSTFRPPXXX",
-                "street": "115 rue de Sèvres",
-                "zip": "75007",
-                "city": "Paris",
-                "country": cls.env.ref("base.fr").id,
+                "name": "BANCO BILBAO VIZCAYA ARGENTARIA, S.A.",
+                "bic": "BBVAESMMXXX",
+                "street": "DE SAN NICOLAS 4",
+                "zip": "48005",
+                "city": "BILBAO",
+                "country": cls.env.ref("base.es").id,
             }
         )
         cls.company_bank = cls.env["res.partner.bank"].create(

@@ -8,12 +8,11 @@ import logging
 from datetime import datetime
 
 from lxml import etree
+from schwifty import IBAN
 
 from odoo import _, api, fields, models, tools
 from odoo.exceptions import UserError
 from odoo.tools.safe_eval import safe_eval
-
-from schwifty import IBAN
 
 try:
     from unidecode import unidecode
@@ -482,8 +481,10 @@ class AccountPaymentOrder(models.Model):
                 _partner_bic = partner_bank.bank_bic
             else:
                 raise UserError(
-                    f"bic {partner_bank.bank_bic} doesn't match expected length of 8 or 11 Characters "
-                    f"for Bank {partner_bank.bank_name}, IBAN {partner_bank.acc_number}")
+                    f"bic {partner_bank.bank_bic} doesn't match expected "
+                    f"length of 8 or 11 Characters "
+                    f"for Bank {partner_bank.bank_name}, "
+                    f"IBAN {partner_bank.acc_number}")
             # calculate BIC from IBAN
             _bic = IBAN(partner_bank.acc_number).bic
             if _bic and len(_bic) == 8:
@@ -491,7 +492,8 @@ class AccountPaymentOrder(models.Model):
             if _bic and _bic != _partner_bic:
                 raise UserError(
                     f"supplied bic {_partner_bic} doesn't match expected value {_bic} "
-                    f"for Bank {partner_bank.bank_name}, IBAN {partner_bank.acc_number}, "
+                    f"for Bank {partner_bank.bank_name}, "
+                    f"IBAN {partner_bank.acc_number}, "
                     f"BIC {IBAN(partner_bank.acc_number).bic}")
 
             party_agent = etree.SubElement(parent_node, f"{party_type}Agt")
@@ -539,12 +541,14 @@ class AccountPaymentOrder(models.Model):
         if party_type == 'Dbtr':
             if not partner_bank.currency_id:
                 raise UserError(
-                    f"Currency not set for bank: {partner_bank.bank_name}, should be 'EUR' for SEPA payments")
+                    f"Currency not set for bank: {partner_bank.bank_name}, "
+                    f"should be 'EUR' for SEPA payments")
             party_currency = etree.SubElement(party_account, "Ccy")
             party_currency.text = partner_bank.currency_id.name
             if partner_bank.currency_id.name != "EUR":
                 raise UserError(
-                    f"SEPA Payment does only support EUR but not this currency: {partner_bank.currency_id.name}"
+                    f"SEPA Payment does only support EUR but "
+                    f"not this currency: {partner_bank.currency_id.name}"
                     f"for bank: {partner_bank.bank_name}")
         return True
 
