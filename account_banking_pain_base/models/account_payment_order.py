@@ -490,7 +490,7 @@ class AccountPaymentOrder(models.Model):
                 _bic += "XXX"
             if _bic and _bic != _partner_bic:
                 raise UserError(
-                    f"bic {_bic} doesn't match expected value {_bic} "
+                    f"supplied bic {_partner_bic} doesn't match expected value {_bic} "
                     f"for Bank {partner_bank.bank_name}, IBAN {partner_bank.acc_number}, "
                     f"BIC {IBAN(partner_bank.acc_number).bic}")
 
@@ -538,7 +538,8 @@ class AccountPaymentOrder(models.Model):
             party_account_other_id.text = partner_bank.sanitized_acc_number
         if party_type == 'Dbtr':
             if not partner_bank.currency_id:
-                raise UserError(f"Currency not set for bank: {partner_bank.bank_name}, should be 'EUR' for SEPA payments")
+                raise UserError(
+                    f"Currency not set for bank: {partner_bank.bank_name}, should be 'EUR' for SEPA payments")
             party_currency = etree.SubElement(party_account, "Ccy")
             party_currency.text = partner_bank.currency_id.name
             if partner_bank.currency_id.name != "EUR":
