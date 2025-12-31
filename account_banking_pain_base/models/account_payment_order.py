@@ -13,6 +13,8 @@ from odoo import _, api, fields, models, tools
 from odoo.exceptions import UserError
 from odoo.tools.safe_eval import safe_eval
 
+from schwifty import IBAN
+
 try:
     from unidecode import unidecode
 except ImportError:
@@ -40,21 +42,21 @@ class AccountPaymentOrder(models.Model):
         default="SLEV",
         tracking=True,
         help="Following service level : transaction charges are to be "
-        "applied following the rules agreed in the service level "
-        "and/or scheme (SEPA Core messages must use this). Shared : "
-        "transaction charges on the debtor side are to be borne by "
-        "the debtor, transaction charges on the creditor side are to "
-        "be borne by the creditor. Borne by creditor : all "
-        "transaction charges are to be borne by the creditor. Borne "
-        "by debtor : all transaction charges are to be borne by the "
-        "debtor.",
+             "applied following the rules agreed in the service level "
+             "and/or scheme (SEPA Core messages must use this). Shared : "
+             "transaction charges on the debtor side are to be borne by "
+             "the debtor, transaction charges on the creditor side are to "
+             "be borne by the creditor. Borne by creditor : all "
+             "transaction charges are to be borne by the creditor. Borne "
+             "by debtor : all transaction charges are to be borne by the "
+             "debtor.",
     )
     batch_booking = fields.Boolean(
         tracking=True,
         help="If true, the bank statement will display only one debit "
-        "line for all the wire transfers of the SEPA XML file ; if "
-        "false, the bank statement will display one debit line per wire "
-        "transfer of the SEPA XML file.",
+             "line for all the wire transfers of the SEPA XML file ; if "
+             "false, the bank statement will display one debit line per wire "
+             "transfer of the SEPA XML file.",
     )
 
     @api.model
@@ -467,18 +469,37 @@ class AccountPaymentOrder(models.Model):
         This code is mutualized between TRF and DD
         Starting from Feb 1st 2016, we should be able to do
         cross-border SEPA transfers without BIC, cf
-        http://www.europeanpaymentscouncil.eu/index.cfm/
+        https://www.europeanpaymentscouncil.eu/index.cfm/
         sepa-credit-transfer/iban-and-bic/
         In some localization (l10n_ch_sepa for example), they need the
         bank_line argument"""
         assert order in ("B", "C"), "Order can be 'B' or 'C'"
+        # normalize BIC to 11 Characters to avoid issues with some banking software
         if partner_bank.bank_bic:
+            if len(partner_bank.bank_bic) == 8:
+                _partner_bic = partner_bank.bank_bic + "XXX"
+            elif len(partner_bank.bank_bic) == 11:
+                _partner_bic = partner_bank.bank_bic
+            else:
+                raise UserError(
+                    f"bic {partner_bank.bank_bic} doesn't match expected length of 8 or 11 Characters "
+                    f"for Bank {partner_bank.bank_name}, IBAN {partner_bank.acc_number}")
+            # calculate BIC from IBAN
+            _bic = IBAN(partner_bank.acc_number).bic
+            if _bic and len(_bic) == 8:
+                _bic += "XXX"
+            if _bic and _bic != _partner_bic:
+                raise UserError(
+                    f"bic {_bic} doesn't match expected value {_bic} "
+                    f"for Bank {partner_bank.bank_name}, IBAN {partner_bank.acc_number}, "
+                    f"BIC {IBAN(partner_bank.acc_number).bic}")
+
             party_agent = etree.SubElement(parent_node, f"{party_type}Agt")
             party_agent_institution = etree.SubElement(party_agent, "FinInstnId")
             party_agent_bic = etree.SubElement(
                 party_agent_institution, gen_args.get("bic_xml_tag")
             )
-            party_agent_bic.text = partner_bank.bank_bic
+            party_agent_bic.text = _partner_bic
         else:
             if order == "B" or (order == "C" and gen_args["payment_method"] == "DD"):
                 party_agent = etree.SubElement(parent_node, f"{party_type}Agt")
@@ -515,6 +536,15 @@ class AccountPaymentOrder(models.Model):
             party_account_other = etree.SubElement(party_account_id, "Othr")
             party_account_other_id = etree.SubElement(party_account_other, "Id")
             party_account_other_id.text = partner_bank.sanitized_acc_number
+        if party_type == 'Dbtr':
+            if not partner_bank.currency_id:
+                raise UserError(f"Currency not set for bank: {partner_bank.bank_name}, should be 'EUR' for SEPA payments")
+            party_currency = etree.SubElement(party_account, "Ccy")
+            party_currency.text = partner_bank.currency_id.name
+            if partner_bank.currency_id.name != "EUR":
+                raise UserError(
+                    f"SEPA Payment does only support EUR but not this currency: {partner_bank.currency_id.name}"
+                    f"for bank: {partner_bank.bank_name}")
         return True
 
     @api.model
