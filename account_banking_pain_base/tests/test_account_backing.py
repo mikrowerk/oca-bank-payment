@@ -26,11 +26,13 @@ class TestPainBase(BaseCommon):
         Journal = cls.env["account.journal"].search([], limit=1)
         cls.partner = cls.env["res.partner"].create({"name": "Partner"})
         Bank = cls.env["res.bank"].create({"name": "Bank", "bic": "NEDSZAJJXXX"})
+        _eur = cls.env["res.currency"].search([('name', "=", 'EUR')]).mapped('id')
         cls.partner_bank = cls.env["res.partner.bank"].create(
             {
                 "partner_id": cls.partner.id,
                 "bank_id": Bank.id,
                 "acc_number": "ES12345678901234567890",
+                "currency_id": _eur[0] if len(_eur) > 0 else None,
             }
         )
         cls.order = cls.env["account.payment.order"].create(
