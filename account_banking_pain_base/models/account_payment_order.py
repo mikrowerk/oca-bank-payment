@@ -546,7 +546,7 @@ class AccountPaymentOrder(models.Model):
         if party_type == 'Dbtr' and gen_args.get("pain_flavor", "") == "pain.001.001.03":
             party_currency = etree.SubElement(party_account, "Ccy")
             if not partner_bank.currency_id:
-                logger.warning(
+                logger.info(
                     f"Currency not set for bank: {partner_bank.bank_name}, "
                     f"should be 'EUR' for SEPA payments, will assume 'EUR'")
                 party_currency.text = "EUR"
