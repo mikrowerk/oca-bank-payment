@@ -538,7 +538,7 @@ class AccountPaymentOrder(models.Model):
             party_account_other = etree.SubElement(party_account_id, "Othr")
             party_account_other_id = etree.SubElement(party_account_other, "Id")
             party_account_other_id.text = partner_bank.sanitized_acc_number
-        if party_type == 'Dbtr':
+        if party_type == 'Dbtr' and gen_args.get("pain_flavor", "") == "pain.001.001.03":
             party_currency = etree.SubElement(party_account, "Ccy")
             if not partner_bank.currency_id:
                 logger.warning(
