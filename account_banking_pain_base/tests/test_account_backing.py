@@ -1,10 +1,8 @@
 from lxml import etree
 import logging
 
-from odoo.exceptions import UserError
-
-from odoo.addons.base.tests.common import BaseCommon
 from odoo.exceptions import UserError as OdooUserError
+from odoo.addons.base.tests.common import BaseCommon
 
 _logger = logging.getLogger(__name__)
 
@@ -197,7 +195,7 @@ class TestPainBase(BaseCommon):
             field_name, field_value, eval_ctx, gen_args=gen_args
         )
         self.assertEqual(result, "aeiounNcC---------")
-        with self.assertRaises(UserError):
+        with self.assertRaises(OdooUserError):
             self.order._prepare_field(field_name, "''", eval_ctx, gen_args=gen_args)
         long_value = "'{}'".format("a" * 50)
         result = self.order._prepare_field(
