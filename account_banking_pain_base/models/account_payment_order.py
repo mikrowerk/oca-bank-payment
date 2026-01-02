@@ -11,7 +11,7 @@ from lxml import etree
 from schwifty import IBAN
 
 from odoo import _, api, fields, models, tools
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError as OdooUserError
 from odoo.tools.safe_eval import safe_eval
 
 try:
@@ -218,14 +218,14 @@ class AccountPaymentOrder(models.Model):
                 "\tcontext: {eval_ctx}\n"
                 "\tfield path: {field_value}"
             ).format(eval_ctx=eval_ctx, field_value=field_value)
-            raise UserError(
+            raise OdooUserError(
                 "\n".join(
                     [error_msg_prefix] + error_msg_details_list + [error_msg_data]
                 )
             ) from None
 
         if not isinstance(value, str):
-            raise UserError(
+            raise OdooUserError(
                 _(
                     "The type of the field '%(field)s' is %(value)s. It should be a string "  # noqa: E501
                     "or unicode.",
@@ -234,7 +234,7 @@ class AccountPaymentOrder(models.Model):
                 )
             )
         if not value:
-            raise UserError(
+            raise OdooUserError(
                 _("The '%s' is empty or 0. It should have a non-null value.")
                 % field_name
             )
@@ -272,7 +272,7 @@ class AccountPaymentOrder(models.Model):
             logger.warning("The XML file is invalid against the XML Schema Definition")
             logger.warning(xml_string)
             logger.warning(e)
-            raise UserError(
+            raise OdooUserError(
                 _(
                     "The generated XML file is not valid against the official "
                     "XML Schema Definition. The generated XML file and the "
@@ -450,7 +450,7 @@ class AccountPaymentOrder(models.Model):
                 iniparty_org_other_issuer = etree.SubElement(iniparty_org_other, "Issr")
                 iniparty_org_other_issuer.text = initiating_party_issuer
         elif self._must_have_initiating_party(gen_args):
-            raise UserError(
+            raise OdooUserError(
                 _(
                     "Missing 'Initiating Party Issuer' and/or "
                     "'Initiating Party Identifier' for the company '%s'. "
@@ -480,7 +480,7 @@ class AccountPaymentOrder(models.Model):
             elif len(partner_bank.bank_bic) == 11:
                 _partner_bic = partner_bank.bank_bic
             else:
-                raise UserError(
+                raise OdooUserError(
                     f"bic {partner_bank.bank_bic} doesn't match expected "
                     f"length of 8 or 11 Characters "
                     f"for Bank {partner_bank.bank_name}, "
@@ -489,13 +489,13 @@ class AccountPaymentOrder(models.Model):
             try:
                 _bic = IBAN(partner_bank.acc_number).bic
             except Exception as ex:
-                raise UserError(
+                raise OdooUserError(
                     f"supplied IBAN {partner_bank.acc_number}, "
                     f"seams to be wrong, causing exception:  {ex}")
             if _bic and len(_bic) == 8:
                 _bic += "XXX"
             if _bic and _bic != _partner_bic:
-                raise UserError(
+                raise OdooUserError(
                     f"supplied bic {_partner_bic} doesn't match expected value {_bic} "
                     f"for Bank {partner_bank.bank_name}, "
                     f"IBAN {partner_bank.acc_number}, "
@@ -551,7 +551,7 @@ class AccountPaymentOrder(models.Model):
                     f"should be 'EUR' for SEPA payments, will assume 'EUR'")
                 party_currency.text = "EUR"
             elif partner_bank.currency_id.name != "EUR":
-                raise UserError(
+                raise OdooUserError(
                     f"SEPA Payment does only support EUR but "
                     f"not this currency: {partner_bank.currency_id.name}"
                     f"for bank: {partner_bank.bank_name}")

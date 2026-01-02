@@ -1,8 +1,12 @@
 from lxml import etree
+import logging
 
 from odoo.exceptions import UserError
 
 from odoo.addons.base.tests.common import BaseCommon
+from odoo.exceptions import UserError as OdooUserError
+
+_logger = logging.getLogger(__name__)
 
 
 class TestPainBase(BaseCommon):
@@ -77,10 +81,12 @@ class TestPainBase(BaseCommon):
             res = self.order.generate_party_agent(
                 parent, "Cdtr", "B", self.partner_bank, self.gen_args
             )
-        except UserError as us:
+        except OdooUserError as us:
             if "Invalid IBAN" in str(us):
-                return
+                _logger.info(f"Detected Invalid IBAN: {us}")
+                return True
             else:
+                _logger.error(f"unexpected exception {us}")
                 raise us
         self.assertTrue(res)
         self.assertIsNotNone(parent.find("CdtrAgt/FinInstnId/BIC"))
