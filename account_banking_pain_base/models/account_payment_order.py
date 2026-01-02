@@ -539,17 +539,20 @@ class AccountPaymentOrder(models.Model):
             party_account_other_id = etree.SubElement(party_account_other, "Id")
             party_account_other_id.text = partner_bank.sanitized_acc_number
         if party_type == 'Dbtr':
-            if not partner_bank.currency_id:
-                raise UserError(
-                    f"Currency not set for bank: {partner_bank.bank_name}, "
-                    f"should be 'EUR' for SEPA payments")
             party_currency = etree.SubElement(party_account, "Ccy")
-            party_currency.text = partner_bank.currency_id.name
-            if partner_bank.currency_id.name != "EUR":
+            if not partner_bank.currency_id:
+                logger.warning(
+                    f"Currency not set for bank: {partner_bank.bank_name}, "
+                    f"should be 'EUR' for SEPA payments, will assume 'EUR'")
+                party_currency.text = "EUR"
+            elif partner_bank.currency_id.name != "EUR":
                 raise UserError(
                     f"SEPA Payment does only support EUR but "
                     f"not this currency: {partner_bank.currency_id.name}"
                     f"for bank: {partner_bank.bank_name}")
+            else:
+                party_currency.text = partner_bank.currency_id.name
+
         return True
 
     @api.model

@@ -108,12 +108,17 @@ class TestPainBase(BaseCommon):
         self.assertEqual(self.company.initiating_party_identifier, "0123456789")
 
     def test_except_messages_prepare_field(self):
-        partner_bank = self.env["res.partner.bank"].create(
-            {
-                "partner_id": self.partner.id,
-                "acc_number": "ES12345678901234567890",
-            }
-        )
+        partner_bank_ids = self.env["res.partner.bank"].search(
+            [('acc_number', "=", "ES12345678901234567890")])
+        if partner_bank_ids and len(partner_bank_ids) > 0:
+            partner_bank = partner_bank_ids[0]
+        else:
+            partner_bank = self.env["res.partner.bank"].create(
+                {
+                    "partner_id": self.partner.id,
+                    "acc_number": "ES12345678901234567890",
+                }
+            )
         payment_line = self.env["account.payment.line"].create(
             {
                 "order_id": self.order.id,
