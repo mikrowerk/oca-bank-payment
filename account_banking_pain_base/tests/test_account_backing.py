@@ -29,7 +29,7 @@ class TestPainBase(BaseCommon):
         )
         Journal = cls.env["account.journal"].search([], limit=1)
         cls.partner = cls.env["res.partner"].create({"name": "Partner"})
-        Bank = cls.env["res.bank"].create({"name": "Bank", "bic": "NEDSZAJJXXX"})
+        Bank = cls.env["res.bank"].create({"name": "Bank", "bic": "CAIXESBBXXX"})
         _eur = cls.env["res.currency"].search([('name', "=", 'EUR')]).mapped('id')
         cls.partner_bank = cls.env["res.partner.bank"].create(
             {
