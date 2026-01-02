@@ -491,7 +491,7 @@ class AccountPaymentOrder(models.Model):
             except Exception as ex:
                 raise OdooUserError(
                     f"supplied IBAN {partner_bank.acc_number}, "
-                    f"seams to be wrong, causing exception:  {ex}")
+                    f"seams to be wrong, causing exception:  {ex}") from None
             if _bic and len(_bic) == 8:
                 _bic += "XXX"
             if _bic and _bic != _partner_bic:
