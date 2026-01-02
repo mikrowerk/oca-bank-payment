@@ -8,12 +8,11 @@ import logging
 from datetime import datetime
 
 from lxml import etree
+from schwifty import IBAN
 
 from odoo import _, api, fields, models, tools
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError as OdooUserError
 from odoo.tools.safe_eval import safe_eval
-
-from schwifty import IBAN
 
 try:
     from unidecode import unidecode
@@ -219,14 +218,14 @@ class AccountPaymentOrder(models.Model):
                 "\tcontext: {eval_ctx}\n"
                 "\tfield path: {field_value}"
             ).format(eval_ctx=eval_ctx, field_value=field_value)
-            raise UserError(
+            raise OdooUserError(
                 "\n".join(
                     [error_msg_prefix] + error_msg_details_list + [error_msg_data]
                 )
             ) from None
 
         if not isinstance(value, str):
-            raise UserError(
+            raise OdooUserError(
                 _(
                     "The type of the field '%(field)s' is %(value)s. It should be a string "  # noqa: E501
                     "or unicode.",
@@ -235,7 +234,7 @@ class AccountPaymentOrder(models.Model):
                 )
             )
         if not value:
-            raise UserError(
+            raise OdooUserError(
                 _("The '%s' is empty or 0. It should have a non-null value.")
                 % field_name
             )
@@ -273,7 +272,7 @@ class AccountPaymentOrder(models.Model):
             logger.warning("The XML file is invalid against the XML Schema Definition")
             logger.warning(xml_string)
             logger.warning(e)
-            raise UserError(
+            raise OdooUserError(
                 _(
                     "The generated XML file is not valid against the official "
                     "XML Schema Definition. The generated XML file and the "
@@ -290,7 +289,7 @@ class AccountPaymentOrder(models.Model):
             xml_root, pretty_print=True, encoding="UTF-8", xml_declaration=True
         )
         logger.debug(
-            "Generated SEPA XML file in format %s below" % gen_args["pain_flavor"]
+            f"Generated SEPA XML file in format {gen_args['pain_flavor']} below"
         )
         logger.debug(xml_string)
         self._validate_xml(xml_string, gen_args)
@@ -303,7 +302,7 @@ class AccountPaymentOrder(models.Model):
         pain_flavor = self.payment_mode_id.payment_method_id.pain_version
         nsmap = {
             "xsi": "http://www.w3.org/2001/XMLSchema-instance",
-            None: "urn:iso:std:iso:20022:tech:xsd:%s" % pain_flavor,
+            None: f"urn:iso:std:iso:20022:tech:xsd:{pain_flavor}",
         }
         return nsmap
 
@@ -451,7 +450,7 @@ class AccountPaymentOrder(models.Model):
                 iniparty_org_other_issuer = etree.SubElement(iniparty_org_other, "Issr")
                 iniparty_org_other_issuer.text = initiating_party_issuer
         elif self._must_have_initiating_party(gen_args):
-            raise UserError(
+            raise OdooUserError(
                 _(
                     "Missing 'Initiating Party Issuer' and/or "
                     "'Initiating Party Identifier' for the company '%s'. "
@@ -469,7 +468,7 @@ class AccountPaymentOrder(models.Model):
         This code is mutualized between TRF and DD
         Starting from Feb 1st 2016, we should be able to do
         cross-border SEPA transfers without BIC, cf
-        http://www.europeanpaymentscouncil.eu/index.cfm/
+        https://www.europeanpaymentscouncil.eu/index.cfm/
         sepa-credit-transfer/iban-and-bic/
         In some localization (l10n_ch_sepa for example), they need the
         bank_line argument"""
@@ -481,20 +480,28 @@ class AccountPaymentOrder(models.Model):
             elif len(partner_bank.bank_bic) == 11:
                 _partner_bic = partner_bank.bank_bic
             else:
-                raise UserError(
-                    f"bic {partner_bank.bank_bic} doesn't match expected length of 8 or 11 Characters "
-                    f"for Bank {partner_bank.bank_name}, IBAN {partner_bank.acc_number}")
+                raise OdooUserError(
+                    f"bic {partner_bank.bank_bic} doesn't match expected "
+                    f"length of 8 or 11 Characters "
+                    f"for Bank {partner_bank.bank_name}, "
+                    f"IBAN {partner_bank.acc_number}")
             # calculate BIC from IBAN
-            _bic = IBAN(partner_bank.acc_number).bic
+            try:
+                _bic = IBAN(partner_bank.acc_number).bic
+            except Exception as ex:
+                raise OdooUserError(
+                    f"supplied IBAN {partner_bank.acc_number}, "
+                    f"seams to be wrong, causing exception:  {ex}") from None
             if _bic and len(_bic) == 8:
                 _bic += "XXX"
             if _bic and _bic != _partner_bic:
-                raise UserError(
-                    f"bic {_bic} doesn't match expected value {_bic} "
-                    f"for Bank {partner_bank.bank_name}, IBAN {partner_bank.acc_number}, "
+                raise OdooUserError(
+                    f"supplied bic {_partner_bic} doesn't match expected value {_bic} "
+                    f"for Bank {partner_bank.bank_name}, "
+                    f"IBAN {partner_bank.acc_number}, "
                     f"BIC {IBAN(partner_bank.acc_number).bic}")
 
-            party_agent = etree.SubElement(parent_node, "%sAgt" % party_type)
+            party_agent = etree.SubElement(parent_node, f"{party_type}Agt")
             party_agent_institution = etree.SubElement(party_agent, "FinInstnId")
             party_agent_bic = etree.SubElement(
                 party_agent_institution, gen_args.get("bic_xml_tag")
@@ -502,7 +509,7 @@ class AccountPaymentOrder(models.Model):
             party_agent_bic.text = _partner_bic
         else:
             if order == "B" or (order == "C" and gen_args["payment_method"] == "DD"):
-                party_agent = etree.SubElement(parent_node, "%sAgt" % party_type)
+                party_agent = etree.SubElement(parent_node, f"{party_type}Agt")
                 party_agent_institution = etree.SubElement(party_agent, "FinInstnId")
                 party_agent_other = etree.SubElement(party_agent_institution, "Othr")
                 party_agent_other_identification = etree.SubElement(
@@ -527,7 +534,7 @@ class AccountPaymentOrder(models.Model):
     def generate_party_acc_number(
         self, parent_node, party_type, order, partner_bank, gen_args, bank_line=None
     ):
-        party_account = etree.SubElement(parent_node, "%sAcct" % party_type)
+        party_account = etree.SubElement(parent_node, f"{party_type}Acct")
         party_account_id = etree.SubElement(party_account, "Id")
         if partner_bank.acc_type == "iban":
             party_account_iban = etree.SubElement(party_account_id, "IBAN")
@@ -536,14 +543,22 @@ class AccountPaymentOrder(models.Model):
             party_account_other = etree.SubElement(party_account_id, "Othr")
             party_account_other_id = etree.SubElement(party_account_other, "Id")
             party_account_other_id.text = partner_bank.sanitized_acc_number
-        if party_type == 'Dbtr':
-            if not partner_bank.currency_id:
-                raise UserError(f"{_('Currency not set for bank: ')}{partner_bank.bank_name}")
+        if (party_type == 'Dbtr' and gen_args.get("pain_flavor", "")
+            == "pain.001.001.03"):
             party_currency = etree.SubElement(party_account, "Ccy")
-            party_currency.text = partner_bank.currency_id.name
-            if partner_bank.currency_id.name != "EUR":
-                raise UserError(
-                    f"{_('SEPA Payment does only support EUR but not this currency:')} {partner_bank.currency_id.name}")
+            if not partner_bank.currency_id:
+                logger.info(
+                    f"Currency not set for bank: {partner_bank.bank_name}, "
+                    f"should be 'EUR' for SEPA payments, will assume 'EUR'")
+                party_currency.text = "EUR"
+            elif partner_bank.currency_id.name != "EUR":
+                raise OdooUserError(
+                    f"SEPA Payment does only support EUR but "
+                    f"not this currency: {partner_bank.currency_id.name}"
+                    f"for bank: {partner_bank.bank_name}")
+            else:
+                party_currency.text = partner_bank.currency_id.name
+
         return True
 
     @api.model
