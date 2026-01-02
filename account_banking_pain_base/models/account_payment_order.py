@@ -486,7 +486,12 @@ class AccountPaymentOrder(models.Model):
                     f"for Bank {partner_bank.bank_name}, "
                     f"IBAN {partner_bank.acc_number}")
             # calculate BIC from IBAN
-            _bic = IBAN(partner_bank.acc_number).bic
+            try:
+                _bic = IBAN(partner_bank.acc_number).bic
+            except Exception as ex:
+                raise UserError(
+                    f"supplied IBAN {partner_bank.acc_number}, "
+                    f"seams to be wrong, causing exception:  {ex}")
             if _bic and len(_bic) == 8:
                 _bic += "XXX"
             if _bic and _bic != _partner_bic:
