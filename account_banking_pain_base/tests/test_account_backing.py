@@ -35,7 +35,7 @@ class TestPainBase(BaseCommon):
             {
                 "partner_id": cls.partner.id,
                 "bank_id": Bank.id,
-                "acc_number": "ES12345678901234567890",
+                "acc_number": "ES7921000813610123456789",
                 "currency_id": _eur[0] if len(_eur) > 0 else None,
             }
         )
