@@ -50,7 +50,7 @@ class TestPainBase(BaseCommon):
             {
                 "name": "Test Company",
                 "country_id": cls.env.ref("base.be").id,
-                "vat": "BE0123456789",
+                "vat": "BE0477472701",
             }
         )
 
@@ -115,7 +115,7 @@ class TestPainBase(BaseCommon):
     def test_default_initiating_party(self):
         self.company._default_initiating_party()
         self.assertEqual(self.company.initiating_party_issuer, "KBO-BCE")
-        self.assertEqual(self.company.initiating_party_identifier, "0123456789")
+        self.assertEqual(self.company.initiating_party_identifier, "0477472701")
 
     def test_except_messages_prepare_field(self):
         partner_bank_ids = self.env["res.partner.bank"].search(
@@ -202,3 +202,28 @@ class TestPainBase(BaseCommon):
             field_name, long_value, eval_ctx, max_size=35, gen_args=gen_args
         )
         self.assertEqual(result, "a" * 35)
+
+    def test_default_batch_booking(self):
+        self.assertFalse(self.order.batch_booking)
+        self.assertFalse(self.Mode.default_batch_booking)
+        self.Mode.default_batch_booking = True
+        journal = self.env["account.journal"].search([], limit=1)
+        order = self.env["account.payment.order"].create(
+            {
+                "name": "TESTDBB",
+                "payment_mode_id": self.Mode.id,
+                "journal_id": journal.id,
+            }
+        )
+        self.assertTrue(order.batch_booking)
+        self.assertTrue(self.Mode.default_batch_booking)
+        new_order = self.env["account.payment.order"].create(
+            {
+                "name": "TESTDBB2",
+                "payment_mode_id": self.Mode.id,
+                "journal_id": journal.id,
+                "batch_booking": False,
+            }
+        )
+        self.assertFalse(new_order.batch_booking)
+        self.assertTrue(self.Mode.default_batch_booking)
