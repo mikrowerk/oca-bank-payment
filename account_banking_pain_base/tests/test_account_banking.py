@@ -1,7 +1,9 @@
-from lxml import etree
 import logging
 
+from lxml import etree
+
 from odoo.exceptions import UserError as OdooUserError
+
 from odoo.addons.base.tests.common import BaseCommon
 
 _logger = logging.getLogger(__name__)
