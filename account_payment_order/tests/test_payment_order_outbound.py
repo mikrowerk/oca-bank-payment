@@ -8,6 +8,7 @@ from datetime import date, datetime, timedelta
 from odoo import Command, fields
 from odoo.exceptions import UserError, ValidationError
 from odoo.tests import Form, tagged
+from odoo.tools import mute_logger
 
 from odoo.addons.account.tests.common import AccountTestInvoicingCommon
 
@@ -58,6 +59,7 @@ class TestPaymentOrderOutboundBase(AccountTestInvoicingCommon):
         )
         cls.invoice = cls._create_supplier_invoice(cls, "F1242")
         cls.invoice_02 = cls._create_supplier_invoice(cls, "F1243")
+        cls.receipt = cls._create_supplier_invoice(cls, "F1244", "in_receipt")
         cls.bank_journal = cls.company_data["default_journal_bank"]
         # Make sure no other payment orders are in the DB
         cls.domain = [
@@ -67,7 +69,7 @@ class TestPaymentOrderOutboundBase(AccountTestInvoicingCommon):
         ]
         cls.env["account.payment.order"].search(cls.domain).unlink()
 
-    def _create_supplier_invoice(self, ref):
+    def _create_supplier_invoice(self, ref, move_type="in_invoice"):
         invoice = self.env["account.move"].create(
             {
                 "partner_id": self.partner.id,
@@ -185,7 +187,7 @@ class TestPaymentOrderOutbound(TestPaymentOrderOutboundBase):
             self.env["account.payment.line.create"]
             .with_context(active_model="account.payment.order", active_id=order.id)
             .create(
-                {"date_type": "move", "move_date": datetime.now() + timedelta(days=1)}
+                {"date_type": "move", "filter_date": datetime.now() + timedelta(days=1)}
             )
         )
         line_create.payment_mode = "any"
@@ -195,7 +197,7 @@ class TestPaymentOrderOutbound(TestPaymentOrderOutboundBase):
             self.env["account.payment.line.create"]
             .with_context(active_model="account.payment.order", active_id=order.id)
             .create(
-                {"date_type": "due", "due_date": datetime.now() + timedelta(days=1)}
+                {"date_type": "due", "filter_date": datetime.now() + timedelta(days=1)}
             )
         )
         line_created_due.populate()
@@ -216,6 +218,7 @@ class TestPaymentOrderOutbound(TestPaymentOrderOutboundBase):
                 active_model="account.move", active_ids=self.invoice.ids
             ).create({}).run()
 
+    @mute_logger("odoo.models.unlink")
     def test_cancel_payment_order(self):
         # Open invoice
         self.invoice.action_post()
@@ -249,6 +252,38 @@ class TestPaymentOrderOutbound(TestPaymentOrderOutboundBase):
         payment_order.unlink()
         self.assertEqual(len(self.env["account.payment.order"].search(self.domain)), 0)
 
+    @mute_logger("odoo.models.unlink")
+    def test_creation_in_receipt(self):
+        self.receipt.action_post()
+        # Make sure no others orders are present
+        payment_order_obj = self.env["account.payment.order"]
+        payment_order_obj.search(self.domain).unlink()
+        # Add to payment order using the wizard
+        self.env["account.invoice.payment.line.multi"].with_context(
+            active_model="account.move", active_ids=self.receipt.ids
+        ).create({}).run()
+        payment_order = payment_order_obj.search(self.domain)
+        self.assertEqual(len(payment_order.ids), 1)
+        payment_order.write({"journal_id": self.bank_journal.id})
+        self.assertEqual(len(payment_order.payment_line_ids), 1)
+        self.assertFalse(payment_order.payment_ids)
+        # Open payment order
+        payment_order.draft2open()
+        self.assertEqual(payment_order.payment_count, 1)
+        # Generate and upload
+        payment_order.open2generated()
+        payment_order.generated2uploaded()
+        self.assertEqual(payment_order.state, "uploaded")
+        self.assertEqual(self.receipt.payment_state, "in_payment")
+        with self.assertRaises(UserError):
+            payment_order.unlink()
+        # Cancel order
+        payment_order.action_uploaded_cancel()
+        self.assertEqual(payment_order.state, "cancel")
+        payment_order.cancel2draft()
+        payment_order.unlink()
+        self.assertEqual(len(payment_order_obj.search(self.domain)), 0)
+
     def test_constrains(self):
         outbound_order = self.env["account.payment.order"].create(
             {
@@ -275,6 +310,7 @@ class TestPaymentOrderOutbound(TestPaymentOrderOutboundBase):
             "F1242", self.invoice._get_payment_order_communication_direct()
         )
 
+    @mute_logger("odoo.models.unlink")
     def test_invoice_communication_03(self):
         self.invoice.ref = False
         self.invoice.action_post()
@@ -351,6 +387,7 @@ class TestPaymentOrderOutbound(TestPaymentOrderOutboundBase):
             fields.Date.context_today(outbound_order),
         )
 
+    @mute_logger("odoo.models.unlink")
     def test_supplier_refund(self):
         """
         Confirm the supplier invoice
@@ -386,6 +423,7 @@ class TestPaymentOrderOutbound(TestPaymentOrderOutboundBase):
 
         self.assertEqual("F1242 R1234", payment_order.payment_line_ids.communication)
 
+    @mute_logger("odoo.models.unlink")
     def test_supplier_refund_reference(self):
         """
         Confirm the supplier invoice
