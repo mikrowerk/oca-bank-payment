@@ -1,7 +1,10 @@
+import logging
+
 from lxml import etree
 import logging
 
 from odoo.exceptions import UserError as OdooUserError
+
 from odoo.addons.base.tests.common import BaseCommon
 
 _logger = logging.getLogger(__name__)
@@ -28,7 +31,7 @@ class TestPainBase(BaseCommon):
         Journal = cls.env["account.journal"].search([], limit=1)
         cls.partner = cls.env["res.partner"].create({"name": "Partner"})
         Bank = cls.env["res.bank"].create({"name": "Bank", "bic": "CAIXESBBXXX"})
-        _eur = cls.env["res.currency"].search([('name', "=", 'EUR')]).mapped('id')
+        _eur = cls.env["res.currency"].search([("name", "=", "EUR")]).mapped("id")
         cls.partner_bank = cls.env["res.partner.bank"].create(
             {
                 "partner_id": cls.partner.id,
@@ -119,14 +122,15 @@ class TestPainBase(BaseCommon):
 
     def test_except_messages_prepare_field(self):
         partner_bank_ids = self.env["res.partner.bank"].search(
-            [('acc_number', "=", "ES12345678901234567890")])
+            [("acc_number", "=", "ES1299999999509999999999")]
+        )
         if partner_bank_ids and len(partner_bank_ids) > 0:
             partner_bank = partner_bank_ids[0]
         else:
             partner_bank = self.env["res.partner.bank"].create(
                 {
                     "partner_id": self.partner.id,
-                    "acc_number": "ES12345678901234567890",
+                    "acc_number": "ES1299999999509999999999",
                 }
             )
         payment_line = self.env["account.payment.line"].create(

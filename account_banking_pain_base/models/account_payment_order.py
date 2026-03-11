@@ -487,14 +487,16 @@ class AccountPaymentOrder(models.Model):
                     f"bic {partner_bank.bank_bic} doesn't match expected "
                     f"length of 8 or 11 Characters "
                     f"for Bank {partner_bank.bank_name}, "
-                    f"IBAN {partner_bank.acc_number}")
+                    f"IBAN {partner_bank.acc_number}"
+                )
             # calculate BIC from IBAN
             try:
                 _bic = IBAN(partner_bank.acc_number).bic
             except Exception as ex:
                 raise OdooUserError(
                     f"supplied IBAN {partner_bank.acc_number}, "
-                    f"seams to be wrong, causing exception:  {ex}") from None
+                    f"seams to be wrong, causing exception:  {ex}"
+                ) from None
             if _bic and len(_bic) == 8:
                 _bic += "XXX"
             if _bic and _bic != _partner_bic:
@@ -502,7 +504,8 @@ class AccountPaymentOrder(models.Model):
                     f"supplied bic {_partner_bic} doesn't match expected value {_bic} "
                     f"for Bank {partner_bank.bank_name}, "
                     f"IBAN {partner_bank.acc_number}, "
-                    f"BIC {IBAN(partner_bank.acc_number).bic}")
+                    f"BIC {IBAN(partner_bank.acc_number).bic}"
+                )
 
             party_agent = etree.SubElement(parent_node, f"{party_type}Agt")
             party_agent_institution = etree.SubElement(party_agent, "FinInstnId")
@@ -546,19 +549,23 @@ class AccountPaymentOrder(models.Model):
             party_account_other = etree.SubElement(party_account_id, "Othr")
             party_account_other_id = etree.SubElement(party_account_other, "Id")
             party_account_other_id.text = partner_bank.sanitized_acc_number
-        if (party_type == 'Dbtr' and gen_args.get("pain_flavor", "")
-            == "pain.001.001.03"):
+        if (
+            party_type == "Dbtr"
+            and gen_args.get("pain_flavor", "") == "pain.001.001.03"
+        ):
             party_currency = etree.SubElement(party_account, "Ccy")
             if not partner_bank.currency_id:
                 logger.info(
                     f"Currency not set for bank: {partner_bank.bank_name}, "
-                    f"should be 'EUR' for SEPA payments, will assume 'EUR'")
+                    f"should be 'EUR' for SEPA payments, will assume 'EUR'"
+                )
                 party_currency.text = "EUR"
             elif partner_bank.currency_id.name != "EUR":
                 raise OdooUserError(
                     f"SEPA Payment does only support EUR but "
                     f"not this currency: {partner_bank.currency_id.name}"
-                    f"for bank: {partner_bank.bank_name}")
+                    f"for bank: {partner_bank.bank_name}"
+                )
             else:
                 party_currency.text = partner_bank.currency_id.name
 

@@ -53,7 +53,7 @@ class TestSCT(AccountTestInvoicingCommon):
         cls.bank = cls.env["res.bank"].create(
             {
                 "name": "La Banque Postale",
-                "bic": "PSSTFRPPXXX",
+                "bic": "BBVAESMMXXX",
                 "street": "115 rue de Sèvres",
                 "zip": "75007",
                 "city": "Paris",
@@ -63,7 +63,7 @@ class TestSCT(AccountTestInvoicingCommon):
         cls.bank_1 = cls.env["res.bank"].create(
             {
                 "name": "La Banque Postale",
-                "bic": "PSSTFRPPXXX",
+                "bic": "BBVAESMMXXX",
                 "street": "115 rue de Sèvres",
                 "zip": "75007",
                 "city": "Paris",
