@@ -1,7 +1,6 @@
 import logging
 
 from lxml import etree
-import logging
 
 from odoo.exceptions import UserError as OdooUserError
 

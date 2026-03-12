@@ -7,7 +7,7 @@
     <record id="view_move_form" model="ir.ui.view">
         <field name="name">account_payment_order.view_move_form</field>
         <field name="model">account.move</field>
-        <field name="inherit_id" ref="account_payment_partner.view_move_form"/>
+        <field name="inherit_id" ref="account_payment_partner.view_move_form" />
         <field name="arch" type="xml">
             <button id="account_invoice_payment_btn" position="after">
                 <!-- For customer refunds:
@@ -47,10 +47,10 @@
                     />
                 </button>
             </div>
-            <field name="payment_mode_id" position="after"/>
+            <field name="payment_mode_id" position="after" />
             <!-- First we place the rest of the elements for the new reference distribution -->
             <field name="payment_reference" position="before">
-                <label for="payment_reference"/>
+                <label for="payment_reference" />
                 <div name="payment_reference_div" class="d-flex">
                     <field
                         name="reference_type"
@@ -62,7 +62,7 @@
             </field>
             <!-- Then we move the std field, as this can only be on a first level -->
             <field name="reference_type" position="after">
-                <field name="payment_reference" position="move"/>
+                <field name="payment_reference" position="move" />
             </field>
         </field>
     </record>
@@ -74,13 +74,13 @@
         <field name="res_model">account.invoice.payment.line.multi</field>
         <field name="view_mode">form</field>
         <field name="target">new</field>
-        <field name="binding_model_id" ref="account.model_account_move"/>
+        <field name="binding_model_id" ref="account.model_account_move" />
     </record>
 
     <record id="view_invoice_tree" model="ir.ui.view">
         <field name="name">account_payment_order.view_invoice_tree</field>
         <field name="model">account.move</field>
-        <field name="inherit_id" ref="account.view_invoice_tree"/>
+        <field name="inherit_id" ref="account.view_invoice_tree" />
         <field name="arch" type="xml">
             <xpath expr="//list/header/button" position="after">
                 <button
