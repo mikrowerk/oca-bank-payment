@@ -240,5 +240,5 @@ class AccountMove(models.Model):
         If a payment order fails, it can be canceled and redone.
         """
         if self.line_ids.payment_line_ids:
-            return "paid"   # "in_payment" replaced by "paid"
+            return "paid"  # "in_payment" replaced by "paid"
         return super()._get_invoice_in_payment_state()
