@@ -1,6 +1,7 @@
 # Copyright 2016 Akretion (Alexis de Lattre <alexis.delattre@akretion.com>)
 # Copyright 2020 Sygel Technology - Valentin Vinagre
 # Copyright 2018-2022 Tecnativa - Pedro M. Baeza
+# Copyright 2026 Therp BV <https://therp.nl>.
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
 
 import base64
@@ -9,16 +10,14 @@ import time
 from lxml import etree
 
 from odoo.exceptions import UserError
-from odoo.tests.common import TransactionCase
 
-from odoo.addons.base.tests.common import DISABLED_MAIL_CONTEXT
+from odoo.addons.base.tests.common import BaseCommon
 
 
-class TestSCT(TransactionCase):
+class TestSCT(BaseCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.env = cls.env(context=dict(cls.env.context, **DISABLED_MAIL_CONTEXT))
         cls.account_model = cls.env["account.account"]
         cls.move_model = cls.env["account.move"]
         cls.journal_model = cls.env["account.journal"]
@@ -37,6 +36,18 @@ class TestSCT(TransactionCase):
         cls.usd_currency.active = True
         cls.main_company = cls.env["res.company"].create(
             {"name": "Test EUR company", "currency_id": cls.eur_currency.id}
+        )
+        # PAIN.001.001.09 requires debtor party city (TwnNm) + country (Ctry),
+        # and the debtor is the company partner.
+        cls.main_company.partner_id.write(
+            {
+                "country_id": cls.env["res.country"]
+                .search([("code", "=", "NL")], limit=1)
+                .id,
+                "city": "Amersfoort",
+                "zip": "3865 CC",
+                "street": "Company Street 1",
+            }
         )
         cls.partner_agrolait.company_id = cls.main_company.id
         cls.partner_asus.company_id = cls.main_company.id
@@ -123,12 +134,17 @@ class TestSCT(TransactionCase):
                 "name": "Test Partner 1",
             }
         )
-        cls.partner_bank_1 = cls.env["res.partner.bank"].create(
-            {
-                "acc_number": "FR66 1212 1212 1212 1212 1212 121",
-                "bank_id": cls.bank.id,
-                "partner_id": cls.partner_1.id,
-            }
+        cls.partner_bank_1 = (
+            cls.env["res.partner.bank"]
+            .with_user(cls.env.ref("base.user_admin"))
+            .create(
+                {
+                    "acc_number": "FR66 1212 1212 1212 1212 1212 121",
+                    "bank_id": cls.bank.id,
+                    "partner_id": cls.partner_1.id,
+                    "allow_out_payment": True,
+                }
+            )
         )
         cls.partner_2 = cls.env["res.partner"].create(
             {
@@ -195,6 +211,24 @@ class TestSCT(TransactionCase):
 
     def test_pain_001_05(self):
         self.payment_mode.payment_method_id.pain_version = "pain.001.001.05"
+        self.check_eur_currency_sct()
+
+    def test_pain_001_09_minimal_address(self):
+        self.payment_mode.payment_method_id.write(
+            {
+                "pain_version": "pain.001.001.09",
+                "sepa_pain09_address_mode": "minimal",
+            }
+        )
+        self.check_eur_currency_sct()
+
+    def test_pain_001_09_hybrid_address(self):
+        self.payment_mode.payment_method_id.write(
+            {
+                "pain_version": "pain.001.001.09",
+                "sepa_pain09_address_mode": "hybrid",
+            }
+        )
         self.check_eur_currency_sct()
 
     def test_pain_003_03(self):
@@ -291,6 +325,16 @@ class TestSCT(TransactionCase):
         namespaces = xml_root.nsmap
         namespaces["p"] = xml_root.nsmap[None]
         namespaces.pop(None)
+        if self.payment_mode.payment_method_id.pain_version == "pain.001.001.09":
+            twn = xml_root.xpath("//p:PstlAdr/p:TwnNm", namespaces=namespaces)
+            ctry = xml_root.xpath("//p:PstlAdr/p:Ctry", namespaces=namespaces)
+            self.assertTrue(twn)
+            self.assertTrue(ctry)
+            adr_lines = xml_root.xpath("//p:PstlAdr/p:AdrLine", namespaces=namespaces)
+            if self.payment_mode.payment_method_id.sepa_pain09_address_mode == "hybrid":
+                self.assertGreaterEqual(len(adr_lines), 1)
+            else:
+                self.assertEqual(len(adr_lines), 0)
         pay_method_xpath = xml_root.xpath("//p:PmtInf/p:PmtMtd", namespaces=namespaces)
         self.assertEqual(pay_method_xpath[0].text, "TRF")
         sepa_xpath = xml_root.xpath(

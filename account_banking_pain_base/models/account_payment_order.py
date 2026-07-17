@@ -2,6 +2,7 @@
 # Copyright 2016 Antiun Ingenieria S.L. - Antonio Espinosa
 # Copyright 2021 Tecnativa - Carlos Roca
 # Copyright 2014-2022 Tecnativa - Pedro M. Baeza
+# Copyright 2026 Therp BV <https://therp.nl>.
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl.html).
 
 import logging
@@ -284,12 +285,12 @@ class AccountPaymentOrder(models.Model):
             ) from None
         return True
 
-    def finalize_sepa_file_creation(self, xml_root, gen_args):
+    def finalize_pain_file_creation(self, xml_root, gen_args):
         xml_string = etree.tostring(
             xml_root, pretty_print=True, encoding="UTF-8", xml_declaration=True
         )
         logger.debug(
-            f"Generated SEPA XML file in format {gen_args['pain_flavor']} below"
+            "Generated pain XML file in format %s below" % gen_args["pain_flavor"]
         )
         logger.debug(xml_string)
         self._validate_xml(xml_string, gen_args)
@@ -396,8 +397,12 @@ class AccountPaymentOrder(models.Model):
             request_date_tag = "ReqdColltnDt"
         else:
             request_date_tag = "ReqdExctnDt"
+        # date should be adjusted for 09
         requested_date_node = etree.SubElement(payment_info, request_date_tag)
-        requested_date_node.text = requested_date
+        if (gen_args.get("pain_flavor", "")).startswith("pain.001.001.09"):
+            etree.SubElement(requested_date_node, "Dt").text = requested_date
+        else:
+            requested_date_node.text = requested_date
         return payment_info, nb_of_transactions, control_sum
 
     @api.model
@@ -462,7 +467,14 @@ class AccountPaymentOrder(models.Model):
 
     @api.model
     def generate_party_agent(
-        self, parent_node, party_type, order, partner_bank, gen_args, bank_line=None
+        self,
+        parent_node,
+        party_type,
+        order,
+        partner_bank,
+        gen_args,
+        bank_line=None,
+        bank_name=None,
     ):
         """Generate the piece of the XML file corresponding to BIC
         This code is mutualized between TRF and DD
@@ -471,7 +483,9 @@ class AccountPaymentOrder(models.Model):
         https://www.europeanpaymentscouncil.eu/index.cfm/
         sepa-credit-transfer/iban-and-bic/
         In some localization (l10n_ch_sepa for example), they need the
-        bank_line argument"""
+        bank_line argument
+        For some special transfers such as International Credit Transfers, we want the
+        bank name to be set besides the BIC."""
         assert order in ("B", "C"), "Order can be 'B' or 'C'"
         # normalize BIC to 11 Characters to avoid issues with some banking software
         if partner_bank.bank_bic:
@@ -507,6 +521,9 @@ class AccountPaymentOrder(models.Model):
                 party_agent_institution, gen_args.get("bic_xml_tag")
             )
             party_agent_bic.text = _partner_bic
+            if bank_name:
+                party_agent_name = etree.SubElement(party_agent_institution, "Nm")
+                party_agent_name.text = bank_name
         else:
             if order == "B" or (order == "C" and gen_args["payment_method"] == "DD"):
                 party_agent = etree.SubElement(parent_node, f"{party_type}Agt")
@@ -543,8 +560,8 @@ class AccountPaymentOrder(models.Model):
             party_account_other = etree.SubElement(party_account_id, "Othr")
             party_account_other_id = etree.SubElement(party_account_other, "Id")
             party_account_other_id.text = partner_bank.sanitized_acc_number
-        if (party_type == 'Dbtr' and gen_args.get("pain_flavor", "")
-            == "pain.001.001.03"):
+        if (party_type == 'Dbtr' and gen_args.get("pain_flavor", "") in
+                ["pain.001.001.03", "pain.001.001.09"]):
             party_currency = etree.SubElement(party_account, "Ccy")
             if not partner_bank.currency_id:
                 logger.info(
@@ -562,10 +579,40 @@ class AccountPaymentOrder(models.Model):
         return True
 
     @api.model
-    def generate_address_block(self, parent_node, partner, gen_args):
-        """Generate the piece of the XML corresponding to PstlAdr"""
-        if partner.country_id:
+    def generate_address_block(self, parent_node, partner, gen_args):  # noqa: C901
+        if not partner.country_id:
+            return True
+        pain_flavor = (gen_args.get("pain_flavor", "")).strip()
+        payment_method = self.payment_mode_id.payment_method_id
+        address_mode = payment_method.sepa_pain09_address_mode
+        if pain_flavor.startswith("pain.001.001.09"):
+            if not partner.city:
+                raise OdooUserError(
+                    _(
+                        "PAIN format %(flavor)s requires City (TwnNm). "
+                        "Partner missing City: %(partner)s. "
+                        "Please set a City or choose an older PAIN format."
+                    )
+                    % {"flavor": pain_flavor, "partner": partner.display_name}
+                )
             postal_address = etree.SubElement(parent_node, "PstlAdr")
+            if address_mode == "hybrid" and partner.zip:
+                pstcd = etree.SubElement(postal_address, "PstCd")
+                pstcd.text = self._prepare_field(
+                    "zip",
+                    "partner.zip",
+                    {"partner": partner},
+                    16,
+                    gen_args=gen_args,
+                ).strip()
+            twn = etree.SubElement(postal_address, "TwnNm")
+            twn.text = self._prepare_field(
+                "city",
+                "partner.city",
+                {"partner": partner},
+                35,
+                gen_args=gen_args,
+            ).strip()
             country = etree.SubElement(postal_address, "Ctry")
             country.text = self._prepare_field(
                 "Country",
@@ -573,50 +620,97 @@ class AccountPaymentOrder(models.Model):
                 {"partner": partner},
                 2,
                 gen_args=gen_args,
-            )
-            if partner.street:
-                adrline1 = etree.SubElement(postal_address, "AdrLine")
-                adrline1.text = self._prepare_field(
-                    "Adress Line1",
-                    "partner.street",
+            ).strip()
+            if address_mode == "hybrid":
+                if partner.street:
+                    val = self._prepare_field(
+                        "Address Line 1",
+                        "partner.street",
+                        {"partner": partner},
+                        70,
+                        gen_args=gen_args,
+                    ).strip()
+                    if val:
+                        etree.SubElement(postal_address, "AdrLine").text = val
+                if partner.street2:
+                    val = self._prepare_field(
+                        "Address Line 2",
+                        "partner.street2",
+                        {"partner": partner},
+                        70,
+                        gen_args=gen_args,
+                    ).strip()
+                    if val:
+                        etree.SubElement(postal_address, "AdrLine").text = val
+            return True
+
+        postal_address = etree.SubElement(parent_node, "PstlAdr")
+        country = etree.SubElement(postal_address, "Ctry")
+        country.text = self._prepare_field(
+            "Country",
+            "partner.country_id.code",
+            {"partner": partner},
+            2,
+            gen_args=gen_args,
+        ).strip()
+
+        if partner.street:
+            val = self._prepare_field(
+                "Address Line 1",
+                "partner.street",
+                {"partner": partner},
+                70,
+                gen_args=gen_args,
+            ).strip()
+            if val:
+                etree.SubElement(postal_address, "AdrLine").text = val
+
+        if (
+            pain_flavor.startswith("pain.001.001.")
+            or pain_flavor.startswith("pain.008.001.")
+        ) and (partner.zip or partner.city):
+            val = ""
+            if partner.zip:
+                val += self._prepare_field(
+                    "zip",
+                    "partner.zip",
                     {"partner": partner},
                     70,
                     gen_args=gen_args,
-                )
-            if (
-                gen_args.get("pain_flavor").startswith("pain.001.001.")
-                or gen_args.get("pain_flavor").startswith("pain.008.001.")
-            ) and (partner.zip or partner.city):
-                adrline2 = etree.SubElement(postal_address, "AdrLine")
-                if partner.zip:
-                    val = self._prepare_field(
-                        "zip",
-                        "partner.zip",
-                        {"partner": partner},
-                        70,
-                        gen_args=gen_args,
-                    )
-                else:
-                    val = ""
-                if partner.city:
-                    val += " " + self._prepare_field(
-                        "city",
-                        "partner.city",
-                        {"partner": partner},
-                        70,
-                        gen_args=gen_args,
-                    )
-                adrline2.text = val
+                ).strip()
+            if partner.city:
+                city = self._prepare_field(
+                    "city",
+                    "partner.city",
+                    {"partner": partner},
+                    70,
+                    gen_args=gen_args,
+                ).strip()
+                if city:
+                    val = (val + " " + city).strip()
+            val = val.strip()
+            if val:
+                etree.SubElement(postal_address, "AdrLine").text = val
+
         return True
 
     @api.model
     def generate_party_block(
-        self, parent_node, party_type, order, partner_bank, gen_args, bank_line=None
+        self,
+        parent_node,
+        party_type,
+        order,
+        partner_bank,
+        gen_args,
+        bank_line=None,
+        bank_name=None,
     ):
         """Generate the piece of the XML file corresponding to Name+IBAN+BIC
         This code is mutualized between TRF and DD
         In some localization (l10n_ch_sepa for example), they need the
-        bank_line argument"""
+        bank_line argument
+        For some special transfers such as International Credit Transfers, we want the
+        bank name to be set besides the BIC."""
         assert order in ("B", "C"), "Order can be 'B' or 'C'"
         party_type_label = _("Partner name")
         if party_type == "Cdtr":
@@ -642,6 +736,7 @@ class AccountPaymentOrder(models.Model):
                 partner_bank,
                 gen_args,
                 bank_line=bank_line,
+                bank_name=bank_name,
             )
         party = etree.SubElement(parent_node, party_type)
         party_nm = etree.SubElement(party, "Nm")
@@ -664,6 +759,7 @@ class AccountPaymentOrder(models.Model):
                 partner_bank,
                 gen_args,
                 bank_line=bank_line,
+                bank_name=bank_name,
             )
         return True
 
