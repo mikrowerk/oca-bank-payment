@@ -1,16 +1,15 @@
 # Specification: `account_payment_order_early_payment_discount`
 
-**Target repository:** [OCA/bank-payment](https://github.com/OCA/bank-payment)
-**Target branches:** 17.0 (primary), forward ports to 18.0 and 19.0
-**License:** AGPL-3
-**Status:** Draft for implementation (intended as OCA pull request)
-**Audience:** Claude Code / developer implementing the module
+**Target repository:** [OCA/bank-payment](https://github.com/OCA/bank-payment) **Target
+branches:** 17.0 (primary), forward ports to 18.0 and 19.0 **License:** AGPL-3
+**Status:** Draft for implementation (intended as OCA pull request) **Audience:** Claude
+Code / developer implementing the module
 
 ---
 
 ## 1. Goal
 
-Odoo CE 16+ ships native *Early Payment Discount* (EPD, German: *Skonto*) support on
+Odoo CE 16+ ships native _Early Payment Discount_ (EPD, German: _Skonto_) support on
 payment terms. However, this discount is only applied when paying invoices through the
 standard **Register Payment** wizard (single payment / "mark as paid"). The OCA payment
 order flow (`account_payment_order` → SEPA credit transfer file via
@@ -45,31 +44,30 @@ reduced) payment line amounts.
 
 - Debit orders / SEPA Direct Debit (`inbound`). The design must not break them, but no
   discount logic is applied to them.
-- Multi-stage discounts (e.g. 3% within 10 days, 2% within 20 days) and tolerance
-  days. These are candidates for a future extension module and must not leak into this
+- Multi-stage discounts (e.g. 3% within 10 days, 2% within 20 days) and tolerance days.
+  These are candidates for a future extension module and must not leak into this
   module's data model.
-- Re-implementation of any discount computation. **All** amount, deadline and tax
-  logic is delegated to Odoo CE core (see §4 Adapter layer).
+- Re-implementation of any discount computation. **All** amount, deadline and tax logic
+  is delegated to Odoo CE core (see §4 Adapter layer).
 - `OCA/bank-payment-alternative` (`account_payment_batch_oca`). A later port must be
   possible with minimal effort thanks to the adapter layer, but is not part of this
   deliverable.
 
 ## 3. Module metadata
 
-
-| Key            | Value                                                                                    |
-| -------------- | ---------------------------------------------------------------------------------------- |
-| Technical name | `account_payment_order_early_payment_discount`                                           |
-| Summary        | Apply early payment discounts on payment orders                                          |
-| Version        | `17.0.1.0.0`                                                                             |
-| Category       | `Banking addons`                                                                         |
+| Key            | Value                                                                                   |
+| -------------- | --------------------------------------------------------------------------------------- |
+| Technical name | `account_payment_order_early_payment_discount`                                          |
+| Summary        | Apply early payment discounts on payment orders                                         |
+| Version        | `17.0.1.0.0`                                                                            |
+| Category       | `Banking addons`                                                                        |
 | Depends        | `account_payment_order` (nothing else — **not** `account_banking_sepa_credit_transfer`) |
-| Author         | `mikrowerk Guenther Froestl, Odoo Community Association (OCA)`                           |
-| Website        | `https://github.com/OCA/bank-payment`                                                    |
-| Maintainers    | `https://github.com/mikrowerk`                                                           |
-| Application    | `False`, `installable: True`, `auto_install: False`                                      |
+| Author         | `mikrowerk Guenther Froestl, Odoo Community Association (OCA)`                          |
+| Website        | `https://github.com/OCA/bank-payment`                                                   |
+| Maintainers    | `https://github.com/mikrowerk`                                                          |
+| Application    | `False`, `installable: True`, `auto_install: False`                                     |
 
-Rationale for the dependency choice: the discount belongs to the *payment order layer*.
+Rationale for the dependency choice: the discount belongs to the _payment order layer_.
 Any file format built on top of `account.payment.line` (SCT, and in principle other
 formats) benefits automatically.
 
@@ -89,7 +87,6 @@ The following core API has been verified to exist **with identical signatures on
 17.0, 18.0 and 19.0** (`addons/account/models/account_move.py` /
 `account_move_line.py`):
 
-
 | Core API                                                                                               | Purpose                                                                                   |
 | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
 | `account.move._is_eligible_for_early_payment_discount(currency, reference_date)`                       | Eligibility check (full residual open, deadline not passed, single currency)              |
@@ -100,8 +97,8 @@ The following core API has been verified to exist **with identical signatures on
 
 ### 4.3 Adapter interface
 
-File: `models/epd_adapter.py`, abstract model `epd.adapter`
-(`_name = "epd.adapter"`, `_description = "Early Payment Discount core API adapter"`).
+File: `models/epd_adapter.py`, abstract model `epd.adapter` (`_name = "epd.adapter"`,
+`_description = "Early Payment Discount core API adapter"`).
 
 ```python
 class EpdAdapter(models.AbstractModel):
@@ -130,9 +127,9 @@ class EpdAdapter(models.AbstractModel):
         (keys: aml, amount_currency, balance)."""
 ```
 
-Implementation note for `_epd_get_write_off_vals`: replicate the value-list
-construction used by core `account.payment.register` when
-`early_payment_discount_mode` is set (per aml:
+Implementation note for `_epd_get_write_off_vals`: replicate the value-list construction
+used by core `account.payment.register` when `early_payment_discount_mode` is set (per
+aml:
 `{"aml": aml, "amount_currency": -aml.amount_residual_currency, "balance": currency.round(-aml.amount_residual_currency * conversion_rate)}`),
 pass `open_balance = 0.0` for the fully-discounted case, then flatten the returned
 `dict[account, list[vals]]` into a single `write_off_line_vals` list. Keep this logic
@@ -142,13 +139,13 @@ pass `open_balance = 0.0` for the fully-discounted case, then flatten the return
 
 ### FR-1 — Automatic discount on payment line creation
 
-When payment lines are created from journal items (wizard
-`account.payment.line.create`, the *Add to Payment Order* action on vendor bills, or
+When payment lines are created from journal items (wizard `account.payment.line.create`,
+the _Add to Payment Order_ action on vendor bills, or
 `account.move.line.create_payment_line_from_move_line()`), each line whose move is
 EPD-eligible at the **reference date** (FR-3) is created with:
 
-- `amount_currency` = core `discount_amount_currency` of the payment term line
-  (i.e. residual minus discount),
+- `amount_currency` = core `discount_amount_currency` of the payment term line (i.e.
+  residual minus discount),
 - `pay_with_discount = True`,
 - `discount_date` and `discount_amount_currency` copied onto the payment line.
 
@@ -159,11 +156,11 @@ Hook: override `account.move.line._prepare_payment_line_vals(payment_order)`.
 
 ### FR-2 — Per-line manual control
 
-`account.payment.line` gets a user-editable boolean `pay_with_discount`
-(only while the order is in `draft`/`open` as far as the existing framework allows
-edits). Toggling it switches `amount_currency` between full residual and discounted
-amount via an onchange/compute. Users can thus opt out per line; they can also opt in
-manually for a line the system reset (at their own risk — see FR-4 re-check).
+`account.payment.line` gets a user-editable boolean `pay_with_discount` (only while the
+order is in `draft`/`open` as far as the existing framework allows edits). Toggling it
+switches `amount_currency` between full residual and discounted amount via an
+onchange/compute. Users can thus opt out per line; they can also opt in manually for a
+line the system reset (at their own risk — see FR-4 re-check).
 
 ### FR-3 — Reference date
 
@@ -187,15 +184,15 @@ date:
 
 - Still eligible → unchanged.
 - **No longer eligible** (deadline passed, invoice state changed, partial payment
-  happened meanwhile) → the line is **automatically reset** to the full residual
-  amount: `pay_with_discount = False`, `amount_currency = residual`. The reset is
-  logged in the order chatter (`message_post`) listing the affected
-  invoices/amounts, so the operator sees why totals changed. **No blocking error.**
+  happened meanwhile) → the line is **automatically reset** to the full residual amount:
+  `pay_with_discount = False`, `amount_currency = residual`. The reset is logged in the
+  order chatter (`message_post`) listing the affected invoices/amounts, so the operator
+  sees why totals changed. **No blocking error.**
 
 ### FR-5 — Write-off on payment generation
 
-`account.payment.line._prepare_account_payment_vals()` is extended: if the grouped
-lines contain `pay_with_discount` lines, add
+`account.payment.line._prepare_account_payment_vals()` is extended: if the grouped lines
+contain `pay_with_discount` lines, add
 `write_off_line_vals = adapter._epd_get_write_off_vals(...)` to the returned dict.
 `account.payment` natively supports `write_off_line_vals` in
 `_prepare_move_line_default_vals()`; the payment move then contains bank (discounted
@@ -223,16 +220,14 @@ Re-running `draft2open` after `cancel2draft` re-evaluates FR-4.
 
 `account.payment.line` (new fields, all `readonly=False` only in editable states):
 
-
 | Field                      | Type                   | Notes                                    |
 | -------------------------- | ---------------------- | ---------------------------------------- |
 | `pay_with_discount`        | Boolean                | default from FR-1; user-editable (FR-2)  |
 | `discount_date`            | Date                   | snapshot from move line at line creation |
 | `discount_amount_currency` | Monetary (currency_id) | amount to pay**with** discount           |
 
-No fields are added to `account.payment.order`, `account.payment.mode` or
-`account.move` in v1 (auto-apply is unconditional; a mode-level kill switch can be a
-follow-up).
+No fields are added to `account.payment.order`, `account.payment.mode` or `account.move`
+in v1 (auto-apply is unconditional; a mode-level kill switch can be a follow-up).
 
 ## 7. UI
 
@@ -275,8 +270,8 @@ follow-up).
   `CONTRIBUTORS.md`, `CREDITS.md`, `ROADMAP.md`); never hand-edit the generated
   `README.rst`. ROADMAP must mention: SDD support, multi-stage discounts, port to
   `bank-payment-alternative`.
-- Security: no new models requiring ACLs (only field additions + abstract model →
-  no `ir.model.access.csv` needed; abstract models need none).
+- Security: no new models requiring ACLs (only field additions + abstract model → no
+  `ir.model.access.csv` needed; abstract models need none).
 - Commit style: single commit `[ADD] account_payment_order_early_payment_discount`
   (squash fixups), sign-off per OCA CLA.
 - PR flow: open an **RFC issue** on OCA/bank-payment first (link this spec), then PR
@@ -287,21 +282,20 @@ follow-up).
 
 ## 10. Test plan (`tests/test_epd_payment_order.py`, `TransactionCase`)
 
-Common fixture: company with configurable `early_pay_discount_computation`; payment
-term "2/10 net 30" (`early_discount=True`, `discount_percentage=2`,
-`discount_days=10`); vendor bill 1,000.00 (19% tax) posted today; payment mode using a
-generic manual payment method **plus** one test class running against the SEPA CT
-method if `account_banking_sepa_credit_transfer` is installed (use `@tagged` +
-conditional skip, no hard dependency).
-
+Common fixture: company with configurable `early_pay_discount_computation`; payment term
+"2/10 net 30" (`early_discount=True`, `discount_percentage=2`, `discount_days=10`);
+vendor bill 1,000.00 (19% tax) posted today; payment mode using a generic manual payment
+method **plus** one test class running against the SEPA CT method if
+`account_banking_sepa_credit_transfer` is installed (use `@tagged` + conditional skip,
+no hard dependency).
 
 | #   | Test                                                                                          | Assertions                                                                                          |
 | --- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| T1  | Eligible bill → wizard fills order                                                           | line amount ==`discount_amount_currency`; `pay_with_discount` True; `discount_date` set             |
+| T1  | Eligible bill → wizard fills order                                                            | line amount ==`discount_amount_currency`; `pay_with_discount` True; `discount_date` set             |
 | T2  | Deadline already passed at creation                                                           | full residual; flag False                                                                           |
 | T3  | `date_scheduled` beyond deadline (`date_prefered="fixed"`)                                    | auto-created line not discounted                                                                    |
 | T4  | Auto-reset: line created discounted, then`date_scheduled` moved past deadline, `draft2open()` | amount back to full residual; flag False; chatter message posted                                    |
-| T5  | Toggle`pay_with_discount` off/on                                                              | amount switches full ↔ discounted                                                                  |
+| T5  | Toggle`pay_with_discount` off/on                                                              | amount switches full ↔ discounted                                                                   |
 | T6  | Manual amount edit clears flag                                                                | edge case 5                                                                                         |
 | T7  | Full happy path to`generated2uploaded`                                                        | bill`payment_state` in `paid`/`in_payment`; payment move contains write-off + tax lines; residual 0 |
 | T8  | Write-off equals Register Payment                                                             | run native wizard on a clone bill; compare write-off move line (account, balance, tax) sets         |
@@ -340,8 +334,8 @@ account_payment_order_early_payment_discount/
 
 ## 12. Implementation plan for Claude Code
 
-1. Scaffold module per §11 against a checkout of `OCA/bank-payment` branch `17.0`
-   (Odoo 17 CE dev environment; run existing `account_payment_order` tests first as a
+1. Scaffold module per §11 against a checkout of `OCA/bank-payment` branch `17.0` (Odoo
+   17 CE dev environment; run existing `account_payment_order` tests first as a
    baseline).
 2. Implement `epd_adapter.py` incl. docstrings referencing the exact core methods
    (§4.2/4.3). Unit-test the adapter in isolation (eligibility yes/no, write-off vals
@@ -353,18 +347,18 @@ account_payment_order_early_payment_discount/
 6. Implement FR-5 write-off injection; tests T7–T12 (T8 is the correctness anchor —
    build it early).
 7. Views (§7), readme fragments, `de.po` translation (optional).
-8. `pre-commit run -a`, full test suite of the whole repo (`account_payment_order`
-   must stay green), coverage check.
+8. `pre-commit run -a`, full test suite of the whole repo (`account_payment_order` must
+   stay green), coverage check.
 9. Conditional SEPA test T13.
-10. Prepare RFC issue text + PR description (summary = §1, link spec, screenshots of
-    the payment line UI and chatter reset message).
+10. Prepare RFC issue text + PR description (summary = §1, link spec, screenshots of the
+    payment line UI and chatter reset message).
 
 ## 13. Acceptance criteria
 
 - All tests in §10 pass on Odoo 17.0 CE with only `account_payment_order` (+ optional
   SEPA CT module) installed; repo pre-commit clean.
-- Removing/uninstalling the module leaves existing payment orders functional (fields
-  are additive; no core behavior overridden when no line has the flag).
+- Removing/uninstalling the module leaves existing payment orders functional (fields are
+  additive; no core behavior overridden when no line has the flag).
 - Grep proof: outside `models/epd_adapter.py` there is **no** occurrence of
   `_is_eligible_for_early_payment_discount` or
   `_get_invoice_counterpart_amls_for_early_payment_discount`.
