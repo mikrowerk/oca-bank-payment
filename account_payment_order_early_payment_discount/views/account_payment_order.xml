@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <record id="account_payment_line_tree_epd" model="ir.ui.view">
+        <field name="name">account.payment.line.tree.epd</field>
+        <field name="model">account.payment.line</field>
+        <field
+            name="inherit_id"
+            ref="account_payment_order.account_payment_line_tree"
+        />
+        <field name="arch" type="xml">
+            <field name="ml_maturity_date" position="after">
+                <field name="discount_date" optional="show" />
+                <field name="pay_with_discount" widget="boolean_toggle" />
+                <field name="discount_expiring" column_invisible="1" />
+            </field>
+            <tree position="attributes">
+                <attribute
+                    name="decoration-success"
+                >pay_with_discount and not discount_expiring</attribute>
+                <attribute name="decoration-warning">discount_expiring</attribute>
+            </tree>
+        </field>
+    </record>
+    <record id="account_payment_line_form_epd" model="ir.ui.view">
+        <field name="name">account.payment.line.form.epd</field>
+        <field name="model">account.payment.line</field>
+        <field
+            name="inherit_id"
+            ref="account_payment_order.account_payment_line_form"
+        />
+        <field name="arch" type="xml">
+            <field name="ml_maturity_date" position="after">
+                <field name="discount_date" />
+                <field name="discount_amount_currency" />
+                <field name="pay_with_discount" widget="boolean_toggle" />
+                <field name="discount_expiring" invisible="1" />
+            </field>
+        </field>
+    </record>
+</odoo>
