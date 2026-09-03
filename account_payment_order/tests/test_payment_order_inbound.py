@@ -131,7 +131,9 @@ class TestPaymentOrderInbound(TestPaymentOrderInboundBase):
         payment_order.open2generated()
         payment_order.generated2uploaded()
         self.assertEqual(payment_order.state, "uploaded")
-        self.assertEqual(self.invoice.payment_state, "in_payment")
+        # TOM-54: moves included in a payment order are considered "paid"
+        # (see AccountMove._get_invoice_in_payment_state in models/account_move.py)
+        self.assertEqual(self.invoice.payment_state, "paid")
         with self.assertRaises(UserError):
             payment_order.unlink()
         # Cancel order

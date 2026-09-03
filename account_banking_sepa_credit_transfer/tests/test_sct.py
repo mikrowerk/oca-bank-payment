@@ -123,7 +123,10 @@ class TestSCT(BaseCommon):
         )
         cls.partner_bank = cls.env["res.partner.bank"].create(
             {
-                "acc_number": "ES52 0182 2782 5688 3882 1868",
+                # IBAN of La Banque Postale (bank code 20041), consistent with the
+                # bank's BIC PSSTFRPP: the pain generator validates the BIC
+                # derived from the IBAN against the bank's BIC.
+                "acc_number": "FR14 2004 1010 0505 0001 3M02 606",
                 "bank_id": cls.bank.id,
                 "partner_id": cls.main_company.partner_id.id,
                 "company_id": cls.main_company.id,
