@@ -15,18 +15,59 @@ class EpdAdapter(models.AbstractModel):
     _name = "epd.adapter"
     _description = "Early Payment Discount core API adapter"
 
+    # Move types core considers for the early payment discount (mirrors
+    # `account.move._is_eligible_for_early_payment_discount()`).
+    _EPD_MOVE_TYPES = ("out_invoice", "out_receipt", "in_invoice", "in_receipt")
+
+    @api.model
+    def _epd_eligible_payment_states(self):
+        """Payment states in which a bill may still take the discount.
+
+        Core only accepts ``not_paid``. ``payment_scheduled`` is an extra
+        state added by ``mikrowerk_account_payment`` ("Schedule Payment")
+        for bills that are queued for a payment order but not paid yet; such
+        a bill is still fully open, so it must keep its discount. The value
+        is compared as a plain string, so this works whether or not that
+        module is installed.
+        """
+        return ("not_paid", "payment_scheduled")
+
+    @api.model
+    def _epd_core_is_eligible(self, move, currency, reference_date):
+        """Re-implementation of
+        `account.move._is_eligible_for_early_payment_discount()` with the
+        payment state check widened to `_epd_eligible_payment_states()`.
+
+        Core hard-codes ``payment_state == 'not_paid'``; every other
+        condition is evaluated exactly as core does, so a ``not_paid`` bill
+        yields the same answer as the core method (see test T14).
+        """
+        move.ensure_one()
+        term = move.invoice_payment_term_id
+        return bool(
+            move.currency_id == currency
+            and move.move_type in self._EPD_MOVE_TYPES
+            and term.early_discount
+            and (
+                not reference_date
+                or reference_date <= term._get_last_discount_date(move.invoice_date)
+            )
+            and move.payment_state in self._epd_eligible_payment_states()
+        )
+
     @api.model
     def _epd_is_eligible(self, move_line, reference_date):
         """Return True if ``move_line`` (a payment term line) is eligible for
         the early payment discount at ``reference_date``.
 
-        Wraps `account.move._is_eligible_for_early_payment_discount()` and
-        additionally rejects discounts that round to zero (edge case: the
-        discount amount equals the residual at currency precision).
+        Mirrors `account.move._is_eligible_for_early_payment_discount()`
+        (see `_epd_core_is_eligible()`, which also accepts scheduled bills)
+        and additionally rejects discounts that round to zero (edge case:
+        the discount amount equals the residual at currency precision).
         """
         move = move_line.move_id
-        if not move._is_eligible_for_early_payment_discount(
-            move_line.currency_id, reference_date
+        if not self._epd_core_is_eligible(
+            move, move_line.currency_id, reference_date
         ):
             return False
         currency = move_line.currency_id

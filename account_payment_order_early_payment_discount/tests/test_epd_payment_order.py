@@ -385,6 +385,118 @@ class TestEpdPaymentOrder(AccountTestInvoicingCommon):
         order.generated2uploaded()
         self.assertEqual(bill.amount_residual, 0.0)
 
+    # ------------------------------------------------------------------
+    # T14-T16: Eligibility adapter (core parity, payment states)
+    # ------------------------------------------------------------------
+
+    def test_t14_adapter_eligibility_matches_core_for_not_paid_bills(self):
+        """The re-implemented eligibility check must give the same answer as
+        core for every `not_paid` bill, whatever the reason for (in)eligibility."""
+        today = fields.Date.today()
+        adapter = self.env["epd.adapter"]
+        foreign_currency = self.currency_data["currency"]
+        cases = {
+            "eligible today": (self._create_bill(today), today),
+            "no reference date": (self._create_bill(today), False),
+            "last discount day": (self._create_bill(today), today + timedelta(days=10)),
+            "deadline passed": (self._create_bill(today), today + timedelta(days=11)),
+            "old bill": (self._create_bill("2000-01-01"), today),
+            "plain term": (
+                self._create_bill(today, payment_term=self.pay_term_plain),
+                today,
+            ),
+        }
+        for label, (bill, reference_date) in cases.items():
+            with self.subTest(case=label):
+                self.assertEqual(bill.payment_state, "not_paid")
+                self.assertEqual(
+                    adapter._epd_core_is_eligible(
+                        bill, bill.currency_id, reference_date
+                    ),
+                    bill._is_eligible_for_early_payment_discount(
+                        bill.currency_id, reference_date
+                    ),
+                )
+        bill = self._create_bill(today)
+        with self.subTest(case="currency mismatch"):
+            self.assertEqual(
+                adapter._epd_core_is_eligible(bill, foreign_currency, today),
+                bill._is_eligible_for_early_payment_discount(foreign_currency, today),
+            )
+            self.assertFalse(
+                adapter._epd_core_is_eligible(bill, foreign_currency, today)
+            )
+
+    def test_t15_partially_paid_bill_not_eligible(self):
+        bill = self._create_bill(fields.Date.today())
+        (
+            self.env["account.payment.register"]
+            .with_context(active_model="account.move", active_ids=bill.ids)
+            .create({"payment_date": fields.Date.today(), "amount": 100.0})
+            ._create_payments()
+        )
+        self.assertEqual(bill.payment_state, "partial")
+        self.assertNotIn(
+            "partial", self.env["epd.adapter"]._epd_eligible_payment_states()
+        )
+        order = self._create_order(date_prefered="now")
+        payline = self._add_to_order(bill, order)
+        self.assertFalse(payline.pay_with_discount)
+        move_line = self._payable_line(bill)
+        self.assertEqual(payline.amount_currency, -move_line.amount_residual_currency)
+
+    def _schedule_bill(self, bill):
+        """Put ``bill`` into the `payment_scheduled` state provided by
+        `mikrowerk_account_payment`; skip the test when that module (and thus
+        the state) is not installed in the test database."""
+        field_description = bill._fields["payment_state"].get_description(self.env)
+        selection = dict(field_description["selection"])
+        if "payment_scheduled" not in selection:
+            self.skipTest("mikrowerk_account_payment is not installed")
+        bill.action_register_payment_schedule()
+        self.assertEqual(bill.payment_state, "payment_scheduled")
+
+    def test_t16_scheduled_bill_creates_discounted_line(self):
+        bill = self._create_bill(fields.Date.today())
+        self._schedule_bill(bill)
+        move_line = self._payable_line(bill)
+        # core rejects the scheduled state, the adapter must not
+        self.assertFalse(
+            bill._is_eligible_for_early_payment_discount(
+                bill.currency_id, fields.Date.today()
+            )
+        )
+        order = self._create_order(date_prefered="now")
+        payline = self._add_to_order(bill, order)
+        self.assertTrue(payline.pay_with_discount)
+        self.assertEqual(payline.discount_date, move_line.discount_date)
+        self.assertEqual(payline.amount_currency, -move_line.discount_amount_currency)
+
+    def test_t16_scheduled_bill_expired_deadline_untouched(self):
+        bill = self._create_bill("2000-01-01")
+        self._schedule_bill(bill)
+        order = self._create_order(date_prefered="now")
+        payline = self._add_to_order(bill, order)
+        self.assertFalse(payline.pay_with_discount)
+        move_line = self._payable_line(bill)
+        self.assertEqual(payline.amount_currency, -move_line.amount_residual_currency)
+
+    def test_t16_scheduled_bill_full_happy_path(self):
+        bill = self._create_bill(fields.Date.today())
+        self._schedule_bill(bill)
+        order = self._create_order(date_prefered="now")
+        payline = self._add_to_order(bill, order)
+        order.draft2open()
+        # still eligible on confirmation: no reset, no chatter note
+        self.assertTrue(payline.pay_with_discount)
+        order.generated2uploaded()
+        self.assertIn(bill.payment_state, ("paid", "in_payment"))
+        self.assertEqual(bill.amount_residual, 0.0)
+        write_off_lines = order.payment_ids.move_id.line_ids.filtered(
+            lambda line: line.display_type == "epd"
+        )
+        self.assertTrue(write_off_lines)
+
 
 @tagged("post_install", "-at_install")
 class TestEpdPaymentOrderSepaCt(AccountTestInvoicingCommon):

@@ -4,7 +4,7 @@
 {
     "name": "Account Payment Order Early Payment Discount",
     "summary": "Apply early payment discounts on payment orders",
-    "version": "17.0.1.0.0",
+    "version": "17.0.1.1.0",
     "category": "Banking addons",
     "author": "mikrowerk Guenther Froestl, Odoo Community Association (OCA)",
     "website": "https://github.com/OCA/bank-payment",

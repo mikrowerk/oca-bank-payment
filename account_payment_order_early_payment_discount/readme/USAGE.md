@@ -14,3 +14,9 @@
 
 Users can toggle "Pay with Discount" off/on manually on a payment line while
 the order is still editable.
+
+Eligibility follows the core rules (bill type, payment term with early
+discount, discount deadline, bill still unpaid). In addition to the core
+"Not Paid" state, bills in the "Payment Scheduled" state provided by
+`mikrowerk_account_payment` (*Schedule Payment* button) are treated as unpaid
+and keep their discount when added to a payment order.
